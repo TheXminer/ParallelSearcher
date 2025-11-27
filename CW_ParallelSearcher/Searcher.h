@@ -12,8 +12,8 @@ class Searcher
 public:
 	Searcher(std::shared_ptr<ThreadPool>);
 	~Searcher();
-	void AddFile(const std::string& filePath);
-	std::vector<std::pair<std::string, size_t>> SearchWord(const std::string& word);
+	void AddFile(const uint32_t fileID);
+	std::vector<std::pair<std::string, size_t>> SearchPhrase(const std::string& word);
 
 private:
 	CustomHashTable hashTable;

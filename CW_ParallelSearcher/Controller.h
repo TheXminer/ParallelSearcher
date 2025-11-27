@@ -2,6 +2,8 @@
 #include "ThreadPool.h"
 #include "Searcher.h"
 #include "FileManager.h"
+#include "Response.h"
+#include <map>
 
 class Controller
 {
@@ -9,23 +11,27 @@ private:
 	std::shared_ptr<ThreadPool> threadPool;
 	Searcher searcher;
 
+	using Handler = std::function<Response(const std::string&)>;
+	std::map<std::string, Handler> routeHandlers;
+
 public:
 	Controller(std::shared_ptr<ThreadPool> threadPool);
 	~Controller();
 
 	//POST /addfile
-	void handleAddFile(const std::string& filePath);
+	Response handleAddFile(const std::string& request);
 
 	//GET /search?word=example
-	std::vector<std::pair<std::string, size_t>> handleSearchWord(const std::string& word);
+	Response handleSearchPhrase(const std::string& request);
 
 	//GET /file?id=123
-	FILE handleGetFile(uint64_t fileId);
+	Response handleGetFile(const std::string& request);
 
-
+	std::string JSONifySearchResults(const std::vector<std::pair<std::string, size_t>>& results);
+	std::string getParam(const std::string& req, const std::string& key);
 
 	void handleClient(int clientSocket);
-	std::string getMethod(const std::string& req);
-	std::string getPath(const std::string& req);
+	std::string getRequest(int clientSocket);
+	void sendResponse(int clientSocket, Response response);
+	std::string getRequestInfo(const std::string& req);
 };
-

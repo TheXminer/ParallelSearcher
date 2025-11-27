@@ -3,18 +3,17 @@
 #include <fstream>
 #include <mutex>
 #include <map>
-class FileManager
+static class FileManager
 {
 private:
-	std::string storageDirectory;
-	uint64_t currentFileId;
-	std::mutex fileSaveMutex;
+	static std::string storageDirectory;
+	static uint64_t currentFileId;
+	static std::mutex fileSaveMutex;
 
-	std::map<uint64_t, std::string> fileIndexMap;
+	static std::map<uint64_t, std::string> fileIndexMap;
 public:
-	FileManager();
-	~FileManager();
-	uint64_t saveFile(std::string fileName, FILE file);//returns path to saved file
-	FILE loadFile(uint64_t filePath);//returns file handle
+	FileManager() = delete;
+	static uint64_t SaveFile(const std::string& fileName, const std::string& fileData);//returns saved file ID
+	static const std::string& loadFile(uint64_t filePath);//returns file handle
 };
 

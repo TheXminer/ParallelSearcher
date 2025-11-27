@@ -6,7 +6,7 @@
 #define PORT 54000
 #define BUFFER_SIZE 4096
 
-Listener::Listener()
+Listener::Listener() : controller(threadPool)
 {
 	threadPool.reset(new ThreadPool());
 }

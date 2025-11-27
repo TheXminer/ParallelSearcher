@@ -128,6 +128,7 @@
     <ClCompile Include="FileManager.cpp" />
     <ClCompile Include="Listener.cpp" />
     <ClCompile Include="program.cpp" />
+    <ClCompile Include="Response.cpp" />
     <ClCompile Include="Searcher.cpp" />
     <ClCompile Include="ThreadPool.cpp" />
   </ItemGroup>
@@ -136,6 +137,7 @@
     <ClInclude Include="CustomHashTable.h" />
     <ClInclude Include="FileManager.h" />
     <ClInclude Include="Listener.h" />
+    <ClInclude Include="Response.h" />
     <ClInclude Include="Searcher.h" />
     <ClInclude Include="ThreadPool.h" />
   </ItemGroup>
