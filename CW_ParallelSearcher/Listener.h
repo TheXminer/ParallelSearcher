@@ -14,4 +14,6 @@ public:
 	void handleClient(int serverSocket, std::atomic<uint32_t>& client_counter);
 	int processListening();
 	int startSocket();
+
+	void stopListening();
 };

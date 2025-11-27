@@ -1,26 +1,33 @@
 #pragma once
+#include <vector>
+#include <queue>
 #include <thread>
 #include <mutex>
-#include <vector>
 #include <condition_variable>
-#include <functional>
 #include <future>
+#include <functional>
+#include <atomic>
 
-class ThreadPool
-{
-private:
-	std::vector<std::thread> workers;
-	std::mutex queueMutex;
-	std::condition_variable condition;
-	bool stop;
-
-	std::vector<std::function<void()>> tasks;
-
+class ThreadPool {
 public:
-	ThreadPool(size_t threads = std::thread::hardware_concurrency());
-	~ThreadPool();
-	template<typename F, typename... Args>
-	auto enqueue(F&& f, Args&&... args)->std::future<typename std::result_of<F(Args...)>::type>;
-	void stopPool();
-};
+    ThreadPool(size_t threads = std::thread::hardware_concurrency());
+    ~ThreadPool();
 
+    template<typename F, typename... Args>
+    auto enqueue(F&& f, Args&&... args)
+        -> std::future<std::_Invoke_result_t<F, Args...>>;
+
+    void stopPool();
+
+private:
+    std::vector<std::thread> workers;
+    std::queue<std::function<void()>> tasks;
+
+    std::mutex queueMutex;
+    std::condition_variable condition;
+
+    std::atomic<bool> stop{ false };
+
+private:
+    void workerLoop();
+};

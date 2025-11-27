@@ -102,3 +102,8 @@ int Listener::startSocket()
 	}
 	std::cout << "Server listening on port " << PORT << "...\n";
 }
+
+void Listener::stopListening()
+{
+	threadPool->stopPool();
+}
