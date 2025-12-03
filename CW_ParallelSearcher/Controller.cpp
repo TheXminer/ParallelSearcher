@@ -4,7 +4,22 @@
 #pragma comment(lib, "ws2_32.lib")
 
 Controller::Controller(std::shared_ptr<ThreadPool> threadPool)
-	: threadPool(threadPool), searcher(this->threadPool) {}
+	: threadPool(threadPool), searcher(this->threadPool) {
+	routeHandlers["POST /addfile"] =
+		[this](const std::string& req) {
+		return this->handleAddFile(req);
+		};
+
+	routeHandlers["GET /search"] =
+		[this](const std::string& req) {
+		return this->handleSearchPhrase(req);
+		};
+
+	routeHandlers["GET /file"] =
+		[this](const std::string& req) {
+		return this->handleGetFile(req);
+		};
+}
 
 Response Controller::handleAddFile(const std::string& request)
 {
