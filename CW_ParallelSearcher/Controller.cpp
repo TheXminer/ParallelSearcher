@@ -63,8 +63,32 @@ Response Controller::handleGetFile(const std::string& request)
 		return Response::BadRequest("Invalid 'id' parameter");
 	}
 
-	auto fileContent = FileManager::loadFile(fileId);
+	auto fileContent = FileManager::getFileText(fileId);
 	return Response::Ok(fileContent);
+}
+
+std::string Controller::urlDecode(const std::string& str) {
+	std::string ret;
+	char ch;
+	int i, ii;
+	for (i = 0; i < str.length(); i++) {
+		if (str[i] == '%') {
+			if (i + 2 < str.length()) {
+				std::istringstream iss(str.substr(i + 1, 2));
+				iss >> std::hex >> ii;
+				ch = static_cast<char>(ii);
+				ret += ch;
+				i += 2;
+			}
+		}
+		else if (str[i] == '+') {
+			ret += ' ';
+		}
+		else {
+			ret += str[i];
+		}
+	}
+	return ret;
 }
 
 void Controller::handleClient(int clientSocket)
@@ -122,26 +146,44 @@ std::string Controller::getRequestInfo(const std::string& req)
 	auto first_space_pos = req.find(' ');
 	if (first_space_pos == std::string::npos)
 		return std::string();
-	auto second_space_pos = req.find(' ', first_space_pos + 1);
-	if (second_space_pos == std::string::npos)
-		return std::string();
-	std::string path = req.substr(0, second_space_pos);
+	auto second_delim_pos = req.find('?', first_space_pos + 1);
+	if (second_delim_pos == std::string::npos)
+	{
+		second_delim_pos = req.find(' ', first_space_pos + 1);
+		if(second_delim_pos == std::string::npos)
+			return std::string();
+	}
+
+	std::string path = req.substr(0, second_delim_pos);
 	return path;
 }
 
-std::string Controller::JSONifySearchResults(const std::vector<std::pair<std::string, size_t>>& results)
+std::string Controller::JSONifySearchResults(const std::vector<std::pair<std::string, std::string>>& results)
 {
-	return std::string();
+	std::string json = "{ \"results\": [";
+	for (size_t i = 0; i < results.size(); ++i) {
+		json += "{ \"file\": \"" + results[i].first + "\", \"position\": \"" + results[i].second + "\" }";
+		if (i < results.size() - 1) {
+			json += ", ";
+		}
+	}
+	json += "] }";
+	return json;
 }
 
 std::string Controller::getParam(const std::string& req, const std::string& key)
 {
-	auto pos = req.find(key + "=");
+	auto qpos = req.find('?');
+	if (qpos == std::string::npos) return "";
+
+	auto endPath = req.find(' ', qpos);
+	std::string query = req.substr(qpos + 1, endPath - (qpos + 1));
+
+	auto pos = query.find(key + "=");
 	if (pos == std::string::npos) return "";
 
 	pos += key.size() + 1;
-	auto end = req.find('&', pos);
-	if (end == std::string::npos) end = req.size();
+	auto amp = query.find('&', pos);
 
-	return req.substr(pos, end - pos);
+	return urlDecode(query.substr(pos, amp - pos));
 }

@@ -7,15 +7,18 @@
 #include <map>
 #include <atomic>
 #include <mutex>
-#define BATCH_UPDATE_INTERVAL_MS 1000
+#include <algorithm>
+#define BATCH_UPDATE_INTERVAL_MS 10000
+#define PART_SIZE 30
 
 class Searcher
 {
 public:
 	Searcher(std::shared_ptr<ThreadPool> threadPool);
 	~Searcher();
-	void AddFile(const uint32_t fileID);
-	std::vector<CustomHashTable::WordInfo>& SearchPhrase(const std::string& phrase);
+	void AddFile(const uint64_t fileID);
+	void stopUpdate() { stopFlag = true; }
+	std::vector<std::pair<std::string, std::string>> SearchPhrase(const std::string& phrase);
 
 private:
 	CustomHashTable hashTable;
@@ -24,7 +27,7 @@ private:
 	int fileCount;
 	bool stopFlag = false;
 	std::mutex fileAddMutex;
-	std::vector<uint32_t> filesToAdd;
+	std::vector<uint64_t> filesToAdd;
 	
 	const std::vector<char> delimiters = {
 	' ', '\n', '\t',
@@ -43,7 +46,8 @@ private:
 
 private:
 	void batchUpdate();
-	std::vector<std::pair<std::string, uint64_t>>& splitString(const std::string& str);
-	void loadFileContent(const uint32_t fileID);
+	std::vector<std::pair<std::string, uint64_t>> splitString(const std::string& str);
+	std::string toLower(const std::string& str);
+	void loadFileContent(const uint64_t fileID);
 };
 

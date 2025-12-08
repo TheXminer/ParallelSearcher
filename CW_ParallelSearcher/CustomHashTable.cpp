@@ -57,7 +57,10 @@ CustomHashTable::HashEntry* CustomHashTable::findEntry(const SnapshotTable& snap
 CustomHashTable::Snapshot CustomHashTable::resize
 	(const Snapshot& snapshot) 
 {
-	auto newSize = snapshot.get()->size() * RESIZE_FACTOR;
+	auto curSize = snapshot.get()->size();
+	curSize = (curSize == 0) ? 10 : curSize;
+	auto loadFactor = static_cast<double>(currentSize) / curSize;
+	auto newSize = (loadFactor > LOAD_FACTOR) ? curSize * RESIZE_FACTOR: curSize;
 	auto newBuckets = new SnapshotTable(newSize);
 
 	for (const HashBucket& bucket : *snapshot) {
@@ -79,12 +82,13 @@ void CustomHashTable::Insert(const WordInfo& wordInfo) {
 	auto snapshot = curSnapshot;
 	snapshotMutex.unlock_shared();
 
-	size_t index = HashFunction(wordInfo.word.c_str(), snapshot.get()->size());
 
-	if (contains(snapshot, wordInfo.word.c_str())) {
+	if(!snapshot.get()->empty() && contains(snapshot, wordInfo.word.c_str())) {
+		size_t index = HashFunction(wordInfo.word.c_str(), snapshot.get()->size());
 		std::unique_lock<std::shared_mutex> lock(snapshot->at(index).mtx);
 		HashEntry* oldEntry = findEntry(*snapshot, wordInfo.word);
 		oldEntry->addPosition(wordInfo);
+		currentSize.fetch_add(1);
 		return;
 	}
 
@@ -97,13 +101,18 @@ void CustomHashTable::Insert(const WordInfo& wordInfo) {
 
 	std::unique_lock<std::shared_mutex> lock(snapshotMutex);
 	curSnapshot = reshapedTable;
+	currentSize.fetch_add(1);
 }
 
-std::map<uint32_t, std::set<std::pair<uint64_t, uint64_t>>> CustomHashTable::Find(const char* word)
+CustomHashTable::WordPositions CustomHashTable::Find(const char* word)
 {
 	snapshotMutex.lock_shared();
 	auto snapshot = curSnapshot;
 	snapshotMutex.unlock_shared();
+
+	if(snapshot.get()->empty()) {
+		return {};
+	}
 
 	size_t index = HashFunction(word, snapshot.get()->size());
 	std::shared_lock<std::shared_mutex> lock(snapshot->at(index).mtx);

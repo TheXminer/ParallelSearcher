@@ -5,8 +5,10 @@
 class Listener
 {
 private:
-	Controller controller;
+	Controller* controller;
 	std::shared_ptr<ThreadPool> threadPool;
+	static Listener* instance;
+	std::atomic<bool> listening{ true };
 public:
 	Listener();
 	~Listener();

@@ -2,60 +2,92 @@
 
 Searcher::Searcher(std::shared_ptr<ThreadPool> threadPool) : threadPool(threadPool), fileCount(0)
 {
+	FileManager::Initialize();
+    filesToAdd = FileManager::GetAllFileIds();
 	threadPool->enqueue([this]() { this->batchUpdate(); });
 }
 
-void Searcher::AddFile(const uint32_t fileID)
+Searcher::~Searcher()
+{
+}
+
+void Searcher::AddFile(const uint64_t fileID)
 {
 	std::lock_guard<std::mutex> lock(fileAddMutex);
 	filesToAdd.push_back(fileID);
 }
 
-std::vector<std::pair<std::string, size_t>>& Searcher::SearchPhrase(const std::string& phrase)
+using DocIndices = CustomHashTable::WordPositions;
+DocIndices intersectDocIndices(const DocIndices& currentResults, const DocIndices& nextWordDocs, int offset)
 {
-	std::vector<std::pair<std::string, size_t>> results;
+    DocIndices result;
 
-	auto words = splitString(phrase);
-	if (words.empty())
-		return results;
+    for (const auto& curResult : currentResults)
+    {
+        auto fileID = curResult.first;
+        const auto& currentLocations = curResult.second;
 
-	auto firstWordResults = hashTable.Find(words[0].c_str());
+        auto itNextDoc = nextWordDocs.find(fileID);
+        if (itNextDoc == nextWordDocs.end()) continue;
 
-	for (const auto& elem : firstWordResults)
-	{
-		const char* fileWord = elem.first;
-		size_t position = elem.second;
-		bool match = true;
+        const auto& nextLocations = itNextDoc->second;
 
-		for (size_t i = 1; i < words.size(); i++)
-		{
-			auto nextWordResults = hashTable.Find(words[i].c_str());
+        for (const auto& curLoc : currentLocations)
+        {
+            uint64_t targetIndex = curLoc.wordPosition + offset;
 
-			auto it = std::find_if(
-				nextWordResults.begin(),
-				nextWordResults.end(),
-				[&](const std::pair<char*, size_t>& p)
-				{
-					return strcmp(p.first, fileWord) == 0 &&
-						p.second == position + i;
-				}
-			);
+            auto it = std::lower_bound(nextLocations.begin(), nextLocations.end(), targetIndex,
+                [](const CustomHashTable::WordLocation& loc, uint64_t val) {
+                    return loc.wordPosition < val;
+                });
 
-			if (it == nextWordResults.end())
-			{
-				match = false;
-				break;
-			}
-		}
-
-		if (match)
-		{
-			results.emplace_back(std::string(fileWord), position);
-		}
-	}
-
-	return results;
+            if (it != nextLocations.end() && it->wordPosition == targetIndex)
+            {
+                result[fileID].push_back(curLoc);
+            }
+        }
+    }
+    return result;
 }
+
+std::vector<std::pair<std::string, std::string>> Searcher::SearchPhrase(const std::string& phrase)
+{
+    std::vector<std::pair<std::string, std::string>> results;
+
+    auto words = splitString(phrase);
+    if (words.empty())
+        return results;
+
+    auto currentMatches = hashTable.Find(words[0].first.c_str());
+
+    for (size_t i = 1; i < words.size(); ++i)
+    {
+        if (currentMatches.empty()) break;
+
+        auto nextWordResults = hashTable.Find(words[i].first.c_str());
+
+        currentMatches = intersectDocIndices(currentMatches, nextWordResults, i);
+    }
+
+    for (const auto& docIndex : currentMatches)
+    {
+        uint64_t fileID = docIndex.first;
+        const std::string& fileName = FileManager::getFileName(fileID);
+        
+  //      for(const auto& loc : docIndex.second)
+  //      {
+		//	std::cout << "Found in file ID " << fileID << " (" << fileName << ") at word position " << loc.wordPosition << " (byte offset " << loc.byteOffset << ")" << std::endl;
+		//}
+        for (const auto& loc : docIndex.second)
+        {
+            std::string textPart = FileManager::GetFilePart(fileID, loc.byteOffset, PART_SIZE);
+            results.emplace_back(fileName, textPart);
+        }
+    }
+
+    return results;
+}
+
 void Searcher::batchUpdate()
 {
 	while (!stopFlag)
@@ -70,7 +102,7 @@ void Searcher::batchUpdate()
 	}
 }
 
-std::vector<std::pair<std::string, uint64_t>>& Searcher::splitString(const std::string& str)
+std::vector<std::pair<std::string, uint64_t>> Searcher::splitString(const std::string& str)
 {
 	std::vector<std::pair<std::string, uint64_t>> result;
 	size_t start = 0;
@@ -83,17 +115,27 @@ std::vector<std::pair<std::string, uint64_t>>& Searcher::splitString(const std::
 		}
 		if (end > start)
 		{
-			result.push_back(std::pair<std::string, uint64_t>(str.substr(start, end - start), start));
+			std::string word = toLower(str.substr(start, end - start));
+			result.push_back(std::pair<std::string, uint64_t>(word, start));
 		}
 		start = end + 1;
 	}
 	return result;
 }
 
-void Searcher::loadFileContent(const uint32_t fileID)
+std::string Searcher::toLower(const std::string& str)
+{
+    std::string lowerStr = str;
+    std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(),
+        [](unsigned char c) { return std::tolower(c); });
+	return lowerStr;
+}
+
+void Searcher::loadFileContent(const uint64_t fileID)
 {
 	std::string content = FileManager::getFileText(fileID);
 	auto words = splitString(content);
+	int counter = 0;
 	for (size_t pos = 0; pos < words.size(); ++pos)
 	{
 		const std::string& word = words[pos].first;
@@ -102,7 +144,8 @@ void Searcher::loadFileContent(const uint32_t fileID)
 			continue;
 		}
 
-		hashTable.Insert(word.c_str(), pos, fileID);
+		hashTable.Insert(CustomHashTable::WordInfo(word, pos, counter, fileID));
+		counter++;
 	}
 	++fileCount;
 }

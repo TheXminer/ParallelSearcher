@@ -3,21 +3,24 @@
 #include <WinSock2.h>
 #include <ws2tcpip.h>
 #pragma comment(lib, "ws2_32.lib")
-#define PORT 54000
+#define PORT 8000
 #define BUFFER_SIZE 4096
 
-Listener::Listener() : controller(threadPool)
+Listener::Listener()
 {
-	threadPool.reset(new ThreadPool());
+	threadPool.reset(new ThreadPool(6));
+	controller = new Controller(threadPool);
 }
 
 Listener::~Listener()
 {
+	delete controller;
 	threadPool->stopPool();
 }
 
 void Listener::startListening()
 {
+	std::cout << "Server is running. Press Ctrl+C to stop." << std::endl;
 	threadPool->enqueue(&Listener::processListening, this);
 }
 
@@ -28,7 +31,6 @@ void Listener::handleClient(int serverSocket, std::atomic<uint32_t>& client_coun
 	SOCKET clientSocket = accept(serverSocket, (struct sockaddr*)&clientAddr,
 		&clientAddrLen);
 	if (clientSocket == INVALID_SOCKET) {
-		std::cerr << "Accept failed\n";
 		return;
 	}
 	char client_addr[INET_ADDRSTRLEN];
@@ -39,7 +41,7 @@ void Listener::handleClient(int serverSocket, std::atomic<uint32_t>& client_coun
 	{
 		client_counter++;
 		threadPool->enqueue([this, clientSocket, &client_counter]() {
-			this->controller.handleClient(clientSocket);
+			this->controller->handleClient(clientSocket);
 			client_counter--;
 			});
 	}
@@ -57,7 +59,7 @@ int Listener::processListening()
 		return -1;
 	}
 
-	while (true) {
+	while (listening.load()) {
 		try{
 			handleClient(serverSocket, client_counter);
 		}
@@ -65,6 +67,7 @@ int Listener::processListening()
 			std::cerr << "Exception in handling client: " << ex.what() << std::endl;
 		}
 	}
+	std::cout << "No longer accepting new connections. Waiting for existing clients to finish..." << std::endl;
 	closesocket(serverSocket);
 	WSACleanup();
 	return 0;
@@ -101,9 +104,15 @@ int Listener::startSocket()
 		throw std::runtime_error("Listen failed");
 	}
 	std::cout << "Server listening on port " << PORT << "...\n";
+	return serverSocket;
 }
 
 void Listener::stopListening()
 {
+	listening.store(false);
+	std::cout << "Server stopped listening." << std::endl;
+	controller->stopSearcher();
+	std::cout << "Searcher stopped." << std::endl;
 	threadPool->stopPool();
+	std::cout << "Thread pool stopped." << std::endl;
 }

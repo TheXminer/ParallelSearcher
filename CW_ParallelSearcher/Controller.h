@@ -16,7 +16,7 @@ private:
 
 public:
 	Controller(std::shared_ptr<ThreadPool> threadPool);
-	~Controller();
+	//~Controller();
 
 	//POST /addfile
 	Response handleAddFile(const std::string& request);
@@ -27,11 +27,16 @@ public:
 	//GET /file?id=123
 	Response handleGetFile(const std::string& request);
 
-	std::string JSONifySearchResults(const std::vector<std::pair<std::string, size_t>>& results);
+	std::string JSONifySearchResults(const std::vector<std::pair<std::string, std::string>>& results);
+	std::string urlDecode(const std::string& str);
 	std::string getParam(const std::string& req, const std::string& key);
 
 	void handleClient(int clientSocket);
 	std::string getRequest(int clientSocket);
 	void sendResponse(int clientSocket, Response response);
 	std::string getRequestInfo(const std::string& req);
+
+	void stopSearcher() {
+		searcher.stopUpdate();
+	}
 };

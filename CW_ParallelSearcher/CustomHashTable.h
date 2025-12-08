@@ -10,15 +10,24 @@
 class CustomHashTable
 {
 public:
+	struct WordLocation {
+		size_t wordPosition;
+		size_t byteOffset;
+		bool operator<(const WordLocation& other) const {
+			return this->wordPosition < other.wordPosition;
+		}
+		WordLocation() : wordPosition(0), byteOffset(0) {}
+		WordLocation(size_t wordPos, size_t byteOff)
+			: wordPosition(wordPos), byteOffset(byteOff) {
+		}
+	};
 	struct WordInfo {
 		std::string word;
-		size_t wordNumber;
-		size_t absolutePosition;
+		WordLocation wordLocation;
 		uint32_t fileID;
 
-		WordInfo(std::string word, size_t wordNumber, size_t absolutePosition)
-			: word(word), wordNumber(wordNumber), absolutePosition(absolutePosition) {
-			fileID = 0;
+		WordInfo(std::string word, size_t wordNumber, size_t absolutePosition, uint64_t fileID)
+			: word(word), wordLocation(wordNumber, absolutePosition), fileID(fileID){
 		}
 	};
 
@@ -26,23 +35,24 @@ public:
 	~CustomHashTable();
 
 	void Insert(const WordInfo&);
-	std::map<uint32_t, std::set<std::pair<uint64_t, uint64_t>>> Find(const char* word);
+	using WordPositions = std::map<uint64_t, std::vector<WordLocation>>;
+	WordPositions Find(const char* word);
 
 private:
 	struct HashEntry {
 		std::string word;
-		std::map<uint32_t, std::set<std::pair<uint64_t, uint64_t>>> positions; // fileID -> list of absolute and word positions
+		WordPositions positions; // fileID -> list of absolute and word positions
 		HashEntry* next;
 		HashEntry(const WordInfo& wordInfo)
 			: word(wordInfo.word), next(nullptr)
 		{
-			positions[wordInfo.fileID].emplace(wordInfo.absolutePosition, wordInfo.wordNumber);
+			positions[wordInfo.fileID].push_back(WordLocation(wordInfo.wordLocation.wordPosition, wordInfo.wordLocation.byteOffset));
 		}
-		HashEntry(const std::map<uint32_t, std::set<std::pair<uint64_t, uint64_t>>>& pos, const std::string& w)
+		HashEntry(const WordPositions& pos, const std::string& w)
 			: word(w), positions(pos), next(nullptr) {
 		}
 		void addPosition(const WordInfo& wordInfo) {
-			positions[wordInfo.fileID].emplace(wordInfo.absolutePosition, wordInfo.wordNumber);
+			positions[wordInfo.fileID].push_back(WordLocation(wordInfo.wordLocation.wordPosition, wordInfo.wordLocation.byteOffset));
 		};
 	};
 
@@ -72,6 +82,6 @@ private:
 	std::mutex resizeMutex;
 	std::shared_mutex snapshotMutex;
 	Snapshot curSnapshot;
-	size_t currentSize = 0;
+	std::atomic<size_t> currentSize{ 0 };
 };
 
