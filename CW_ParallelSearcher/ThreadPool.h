@@ -37,7 +37,6 @@ template<typename F, typename... Args>
 auto ThreadPool::enqueue(F&& f, Args&&... args)
 -> std::future<std::_Invoke_result_t<F, Args...>>
 {
-	std::cout << "Enqueue task" << std::endl;
     using return_type = std::_Invoke_result_t<F, Args...>;
 
     auto taskPtr = std::make_shared<std::packaged_task<return_type()>>(

@@ -8,34 +8,72 @@
 #include <atomic>
 #include <mutex>
 #include <algorithm>
+#include <unordered_set>
 #define BATCH_UPDATE_INTERVAL_MS 10000
-#define PART_SIZE 30
+#define PART_SIZE 100
 
 class Searcher
 {
 public:
+	struct SearchResult {
+		uint64_t fileID;
+		std::string fileName;
+		std::string textPart;
+
+		SearchResult(uint64_t id, const std::string& name, const std::string& part)
+			: fileID(id), fileName(name), textPart(part) {
+		}
+
+		std::string escapeJsonString(const std::string& input) const {
+			std::string output;
+			for (char c : input) {
+				switch (c) {
+				case '"': output += "\\\""; break;
+				case '\\': output += "\\\\"; break;
+				case '\n': output += "\\n"; break;
+				case '\r': output += "\\r"; break;
+				default: output += c; break;
+				}
+			}
+			return output;
+		}
+
+		std::string toJSON() const {
+			// Впевніться, що textPart і fileName екрановані
+			std::string safeTextPart = escapeJsonString(textPart);
+			std::string safeFileName = escapeJsonString(fileName);
+
+			return "{\"fileID\": " + std::to_string(fileID) +
+				", \"fileName\": \"" + safeFileName +
+				"\", \"textPart\": \"" + safeTextPart + "\"}";
+		}
+	};
+
 	Searcher(std::shared_ptr<ThreadPool> threadPool);
 	~Searcher();
 	void AddFile(const uint64_t fileID);
 	void stopUpdate() { stopFlag = true; }
-	std::vector<std::pair<std::string, std::string>> SearchPhrase(const std::string& phrase);
+	std::vector<SearchResult> SearchPhrase(const std::string& phrase);
 
 private:
 	CustomHashTable hashTable;
 	std::shared_ptr<ThreadPool> threadPool;
 
-	int fileCount;
+	std::atomic<int> fileCount{ 0 };
 	bool stopFlag = false;
 	std::mutex fileAddMutex;
 	std::vector<uint64_t> filesToAdd;
 	
 	const std::vector<char> delimiters = {
-	' ', '\n', '\t',
-	',', '.', '!', '?', ';', ':', '"', '\'', '(', ')', '[', ']', '{', '}',
-	'-', '_', '/', '\\', '*'
+		' ', '\n', '\t', '\r', '\f', '\v', '\0',
+		',', '.', '!', '?', ';', ':',
+		'"', '\'', '(', ')', '[', ']', '{', '}', '<', '>',
+		'-', '_',
+		'/', '\\', '*', '+', '=', '%', '^', '~',
+		'#', '@', '&', '|', '$'
 	};
 
-	const std::vector<std::string> ignoreWords = {
+	const std::unordered_set<std::string> ignore_set = {
 		"the", "a", "an", "and", "or", "but", "if", "then", "else",
 		"i", "you", "he", "she", "it", "we", "they",
 		"is", "are", "was", "were", "be", "been", "being",
@@ -46,8 +84,12 @@ private:
 
 private:
 	void batchUpdate();
-	std::vector<std::pair<std::string, uint64_t>> splitString(const std::string& str);
-	std::string toLower(const std::string& str);
 	void loadFileContent(const uint64_t fileID);
+
+	using WordToken = std::pair<std::string, uint64_t>;
+	using WordTokens = std::vector<WordToken>;
+	WordTokens splitString(const std::string& str);
+	WordTokens tokenizeWord(const WordTokens& tokens);
+	std::string CleanWordForIndexing(const std::string& word);
 };
 

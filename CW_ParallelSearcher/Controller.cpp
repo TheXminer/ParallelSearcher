@@ -19,18 +19,31 @@ Controller::Controller(std::shared_ptr<ThreadPool> threadPool)
 		[this](const std::string& req) {
 		return this->handleGetFile(req);
 		};
+
+	auto optionRoutes = std::vector<std::string>();
+	for (const auto& route : routeHandlers) {
+		optionRoutes.push_back(route.first.substr(route.first.find(' ') + 1));
+	}
+
+	auto optionHandler =
+		[this](const std::string& req) {
+		return this->handleOptions(req);
+		};
+	for(const auto& route : optionRoutes) {
+		routeHandlers["OPTIONS " + route] = optionHandler;
+	}
 }
 
 Response Controller::handleAddFile(const std::string& request)
 {
-	std::string fileName = getParam(request, "fileName");
+	std::string fileName = getParamFromBody(request, "fileName");
 	if(fileName.empty()) {
 		return Response::BadRequest("Missing 'fileName' parameter");
 	}
 
-	std::string fileData = getParam(request, "fileData");
+	std::string fileData = getParamFromBody(request, "content");
 	if(fileData.empty()) {
-		return Response::BadRequest("Missing 'fileData' parameter");
+		return Response::BadRequest("Missing 'content' parameter");
 	}
 
 	uint32_t fileID = FileManager::SaveFile(fileName, fileData);
@@ -39,6 +52,11 @@ Response Controller::handleAddFile(const std::string& request)
 	}
 	searcher.AddFile(fileID);
 	return Response::Ok("File will be added soon!");
+}
+
+Response Controller::handleOptions(const std::string& request)
+{
+	return Response::Ok();
 }
 
 Response Controller::handleSearchPhrase(const std::string& request)
@@ -96,6 +114,7 @@ void Controller::handleClient(int clientSocket)
 	std::string request = getRequest(clientSocket);
 	if (request.empty()) {
 		sendResponse(clientSocket, Response::BadRequest("Empty request"));
+		return;
 	}
 
 	std::string path = getRequestInfo(request);
@@ -146,23 +165,22 @@ std::string Controller::getRequestInfo(const std::string& req)
 	auto first_space_pos = req.find(' ');
 	if (first_space_pos == std::string::npos)
 		return std::string();
+	auto second_space_pos = req.find(' ', first_space_pos + 1);
 	auto second_delim_pos = req.find('?', first_space_pos + 1);
-	if (second_delim_pos == std::string::npos)
+	if(second_delim_pos != std::string::npos && second_delim_pos < second_space_pos)
 	{
-		second_delim_pos = req.find(' ', first_space_pos + 1);
-		if(second_delim_pos == std::string::npos)
-			return std::string();
+		second_space_pos = second_delim_pos;
 	}
 
-	std::string path = req.substr(0, second_delim_pos);
+	std::string path = req.substr(0, second_space_pos);
 	return path;
 }
 
-std::string Controller::JSONifySearchResults(const std::vector<std::pair<std::string, std::string>>& results)
+std::string Controller::JSONifySearchResults(const std::vector<Searcher::SearchResult>& results)
 {
 	std::string json = "{ \"results\": [";
 	for (size_t i = 0; i < results.size(); ++i) {
-		json += "{ \"file\": \"" + results[i].first + "\", \"position\": \"" + results[i].second + "\" }";
+		json += results[i].toJSON();
 		if (i < results.size() - 1) {
 			json += ", ";
 		}
@@ -186,4 +204,22 @@ std::string Controller::getParam(const std::string& req, const std::string& key)
 	auto amp = query.find('&', pos);
 
 	return urlDecode(query.substr(pos, amp - pos));
+}
+
+std::string Controller::getParamFromBody(const std::string& req, const std::string& key)
+{
+	std::string lowerKey = std::string(key);
+	std::transform(key.begin(), key.end(), lowerKey.begin(),
+		[](unsigned char c) { return std::tolower(c); });
+
+
+	auto bodyPos = req.find("\r\n\r\n");
+	if (bodyPos == std::string::npos) return "";
+	std::string body = req.substr(bodyPos + 4);
+	auto pos = body.find(lowerKey + "\"");
+	if (pos == std::string::npos) return "";
+	pos = body.find("\"", pos) + 1;
+	auto start = body.find("\"", pos) + 1;
+	auto amp = body.find("\"", start);
+	return urlDecode(body.substr(start, amp - start));
 }

@@ -27,9 +27,13 @@ public:
 	//GET /file?id=123
 	Response handleGetFile(const std::string& request);
 
-	std::string JSONifySearchResults(const std::vector<std::pair<std::string, std::string>>& results);
+	//OPTIONS /*
+	Response handleOptions(const std::string& request);
+
+	std::string JSONifySearchResults(const std::vector<Searcher::SearchResult>& results);
 	std::string urlDecode(const std::string& str);
 	std::string getParam(const std::string& req, const std::string& key);
+	std::string getParamFromBody(const std::string& req, const std::string& key);
 
 	void handleClient(int clientSocket);
 	std::string getRequest(int clientSocket);

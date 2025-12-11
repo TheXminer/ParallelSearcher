@@ -24,31 +24,26 @@ void ThreadPool::stopPool()
 
 void ThreadPool::workerLoop()
 {
-    std::cout << "Thread created" << std::endl;
     
     while (true) {
-        std::cout << "Task started" << std::endl;
         std::function<void()> task;
 
+        //std::cout << "Iteration started" << std::endl;
         {
             std::unique_lock<std::mutex> lock(queueMutex);
             condition.wait(lock, [&] {
-                std::cout << "Thread sleep" << std::endl;
+                //std::cout << "Thread sleep" << std::endl;
                 return stop.load() || !tasks.empty();
                 });
 
             if (stop.load() && tasks.empty())
             {
-                std::cout << "Thread closed" << std::endl;
                 return;
             }
 
             task = std::move(tasks.front());
             tasks.pop();
         }
-
         task();
-
-        std::cout << "Task finished" << std::endl;
     }
 }

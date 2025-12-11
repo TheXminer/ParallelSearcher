@@ -20,17 +20,13 @@ uint64_t FileManager::SaveFile(const std::string& fileName, const std::string& f
 {
     std::lock_guard<std::mutex> lock(fileSaveMutex);
 
-    // Create today folder: storage/YYYY-MM-DD/
-    std::string todayFolder = std::string(STORAGE_DIR) + getTodayFolder() + "/";
+    std::string todayFolder = std::string(STORAGE_DIR) + "/" + getTodayFolder() + "/";
     std::filesystem::create_directories(todayFolder);
 
-    // Generate ID
     uint64_t fileId = ++currentFileId;
 
-    // Full path
-    std::string filePath = todayFolder + std::to_string(fileId) + "_" + fileName;
+    std::string filePath = todayFolder + fileName;
 
-    // Save file
     std::ofstream outFile(filePath, std::ios::binary);
     if (!outFile) {
         return 0;
@@ -68,7 +64,7 @@ void FileManager::Initialize(const std::string& storageDir)
 {
     std::lock_guard<std::mutex> lock(fileSaveMutex);
 
-    currentFileId = 1;
+    currentFileId = 0;
     fileIndexMap.clear();
 
     // iterate through storage/YYYY-MM-DD/
@@ -82,8 +78,8 @@ void FileManager::Initialize(const std::string& storageDir)
             std::string filePath = fileEntry.path().string();
             std::string filename = fileEntry.path().filename().string();
 
-            fileIndexMap[currentFileId] = filePath;
 			++currentFileId;
+            fileIndexMap[currentFileId] = filePath;
         }
     }
 	std::cout << "FileManager initialized. Current file ID: " << currentFileId << std::endl;

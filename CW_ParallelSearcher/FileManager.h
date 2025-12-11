@@ -29,4 +29,6 @@ public:
     static void Initialize(const std::string& storageDir = STORAGE_DIR);
     static std::string GetFilePart(uint64_t fileId, size_t partIndex, size_t partSize);
 	static std::vector<uint64_t> GetAllFileIds();
+
+
 };

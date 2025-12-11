@@ -8,7 +8,7 @@
 
 Listener::Listener()
 {
-	threadPool.reset(new ThreadPool(6));
+	threadPool.reset(new ThreadPool(12));
 	controller = new Controller(threadPool);
 }
 

@@ -1,4 +1,5 @@
 #include "Searcher.h"
+#include <regex>
 
 Searcher::Searcher(std::shared_ptr<ThreadPool> threadPool) : threadPool(threadPool), fileCount(0)
 {
@@ -50,11 +51,12 @@ DocIndices intersectDocIndices(const DocIndices& currentResults, const DocIndice
     return result;
 }
 
-std::vector<std::pair<std::string, std::string>> Searcher::SearchPhrase(const std::string& phrase)
+std::vector<Searcher::SearchResult> Searcher::SearchPhrase(const std::string& phrase)
 {
-    std::vector<std::pair<std::string, std::string>> results;
+    std::vector<SearchResult> results;
 
     auto words = splitString(phrase);
+	words = tokenizeWord(words);
     if (words.empty())
         return results;
 
@@ -81,7 +83,8 @@ std::vector<std::pair<std::string, std::string>> Searcher::SearchPhrase(const st
         for (const auto& loc : docIndex.second)
         {
             std::string textPart = FileManager::GetFilePart(fileID, loc.byteOffset, PART_SIZE);
-            results.emplace_back(fileName, textPart);
+			auto fileName = FileManager::getFileName(fileID);
+            results.emplace_back(SearchResult(fileID, fileName, textPart));
         }
     }
 
@@ -92,60 +95,83 @@ void Searcher::batchUpdate()
 {
 	while (!stopFlag)
 	{
-		std::lock_guard<std::mutex> lock(fileAddMutex);
+        fileAddMutex.lock();
 		for (const auto& fileID : filesToAdd)
 		{
-			loadFileContent(fileID);
+            threadPool->enqueue(
+                [this, fileID]() {
+                    this->loadFileContent(fileID);
+                }
+            );
 		}
 		filesToAdd.clear();
+        fileAddMutex.unlock();
 		std::this_thread::sleep_for(std::chrono::milliseconds(BATCH_UPDATE_INTERVAL_MS));
 	}
 }
 
-std::vector<std::pair<std::string, uint64_t>> Searcher::splitString(const std::string& str)
+Searcher::WordTokens Searcher::splitString(const std::string& str)
 {
-	std::vector<std::pair<std::string, uint64_t>> result;
-	size_t start = 0;
-	while (start < str.length())
-	{
-		size_t end = str.find_first_of(delimiters.data(), start);
-		if (end == std::string::npos)
-		{
-			end = str.length();
-		}
-		if (end > start)
-		{
-			std::string word = toLower(str.substr(start, end - start));
-			result.push_back(std::pair<std::string, uint64_t>(word, start));
-		}
-		start = end + 1;
-	}
-	return result;
-}
+    const std::string_view str_view(str);
+    WordTokens result;
 
-std::string Searcher::toLower(const std::string& str)
-{
-    std::string lowerStr = str;
-    std::transform(lowerStr.begin(), lowerStr.end(), lowerStr.begin(),
+    result.reserve(str.length() / 5);
+
+    size_t start = 0;
+
+    while (start < str.length())
+    {
+        size_t end = str_view.find_first_of(delimiters.data(), start);
+
+        if (end == std::string_view::npos)
+        {
+            end = str.length();
+        }
+        if (end > start)
+        {
+            std::string_view word_view = str_view.substr(start, end - start);
+            std::string word(word_view);
+            result.push_back({ std::move(word), start });
+        }
+
+        start = end + 1;
+    }
+    return result;
+}
+std::string Searcher::CleanWordForIndexing(const std::string& word) {
+    static const std::regex allowed(R"([^A-Za-z0-9\-'])");
+    auto result = std::regex_replace(word, allowed, "");;
+
+    std::string clean_word = result;
+    std::transform(clean_word.begin(), clean_word.end(), clean_word.begin(),
         [](unsigned char c) { return std::tolower(c); });
-	return lowerStr;
+    return clean_word;
+}
+Searcher::WordTokens Searcher::tokenizeWord(const WordTokens& tokens)
+{
+    WordTokens filtered_tokens = tokens;
+
+    auto new_end = std::remove_if(
+        filtered_tokens.begin(),
+        filtered_tokens.end(),
+        [this](const WordToken& token) {
+            return ignore_set.count(token.first);
+        }
+    );
+    filtered_tokens.erase(new_end, filtered_tokens.end());
+
+    return filtered_tokens;
 }
 
 void Searcher::loadFileContent(const uint64_t fileID)
 {
 	std::string content = FileManager::getFileText(fileID);
 	auto words = splitString(content);
-	int counter = 0;
 	for (size_t pos = 0; pos < words.size(); ++pos)
 	{
-		const std::string& word = words[pos].first;
-		if (std::find(ignoreWords.begin(), ignoreWords.end(), word) != ignoreWords.end())
-		{
-			continue;
-		}
-
-		hashTable.Insert(CustomHashTable::WordInfo(word, pos, counter, fileID));
-		counter++;
+        auto cleanWord = CleanWordForIndexing(words[pos].first);
+		hashTable.Insert(CustomHashTable::WordInfo(cleanWord, pos, words[pos].second, fileID));
 	}
-	++fileCount;
+    std::cout << fileCount.load() << ": " << fileID << std::endl;
+    fileCount.fetch_add(1);
 }

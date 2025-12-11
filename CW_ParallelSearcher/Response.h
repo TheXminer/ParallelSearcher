@@ -32,7 +32,8 @@ public:
 
     // ---- FACTORY METHODS ----
 
-    static Response Ok(const std::string& body = "");
+    static Response Ok();
+    static Response Ok(const std::string& body);
 
     static Response BadRequest(const std::string& msg = "Bad Request");
 

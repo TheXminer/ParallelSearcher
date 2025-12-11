@@ -3,6 +3,11 @@
 Response::Response(Type type, std::string body, std::string contentType) 
     : type(type), body(std::move(body)), contentType(std::move(contentType)) {}
 
+Response Response::Ok()
+{
+    return Response(Type::Ok, "", "");
+}
+
 Response Response::Ok(const std::string& body)
 {
     return Response(Type::Ok, body);
@@ -31,7 +36,14 @@ std::string Response::toHttpString() const
     std::stringstream ss;
 
     ss << "HTTP/1.1 " << static_cast<int>(type) << " " << status << "\r\n";
-    ss << "Content-Type: " << contentType << "\r\n";
+    if(!contentType.empty()){
+        ss << "Content-Type: " << contentType << "\r\n";
+    }
+    ss << "Access-Control-Allow-Origin: *\r\n";
+    ss << "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n";
+    ss << "Access-Control-Allow-Headers: Content-Type\r\n";
+    ss << "Connection: close\r\n";
+
     ss << "Content-Length: " << body.size() << "\r\n";
     ss << "\r\n";
     ss << body;
