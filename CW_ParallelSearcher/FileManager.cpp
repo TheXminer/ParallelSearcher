@@ -64,25 +64,36 @@ void FileManager::Initialize(const std::string& storageDir)
 {
     std::lock_guard<std::mutex> lock(fileSaveMutex);
 
-    currentFileId = 0;
-    fileIndexMap.clear();
-
-    // iterate through storage/YYYY-MM-DD/
-    for (const auto& dirEntry : std::filesystem::directory_iterator(storageDir))
-    {
-        if (!dirEntry.is_directory())
-            continue;
-
-        for (const auto& fileEntry : std::filesystem::directory_iterator(dirEntry.path()))
-        {
-            std::string filePath = fileEntry.path().string();
-            std::string filename = fileEntry.path().filename().string();
-
-			++currentFileId;
-            fileIndexMap[currentFileId] = filePath;
+    try {
+        if (!std::filesystem::exists(storageDir)) {
+            std::filesystem::create_directories(storageDir);
+            std::cout << "Created storage directory: " << storageDir << std::endl;
         }
+
+        currentFileId = 0;
+        fileIndexMap.clear();
+
+        for (const auto& dirEntry : std::filesystem::directory_iterator(storageDir))
+        {
+            if (!dirEntry.is_directory())
+                continue;
+
+            for (const auto& fileEntry : std::filesystem::directory_iterator(dirEntry.path()))
+            {
+                if (!fileEntry.is_regular_file()) continue;
+
+                std::string filePath = fileEntry.path().string();
+
+                ++currentFileId;
+                fileIndexMap[currentFileId] = filePath;
+            }
+        }
+        std::cout << "FileManager initialized. Files indexed: " << currentFileId << std::endl;
+
     }
-	std::cout << "FileManager initialized. Current file ID: " << currentFileId << std::endl;
+    catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Critical FileSystem error during init: " << e.what() << std::endl;
+    }
 }
 
 std::string FileManager::GetFilePart(uint64_t fileId, size_t partIndex, size_t partSize)

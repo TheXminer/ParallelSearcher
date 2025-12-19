@@ -1,5 +1,5 @@
 #pragma once
-#include "CustomHashTable.h"
+#include "ConcurrentHashMap.h"
 #include "ThreadPool.h"
 #include "FileManager.h"
 #include <string>
@@ -21,7 +21,21 @@ public:
 		std::string textPart;
 
 		SearchResult(uint64_t id, const std::string& name, const std::string& part)
-			: fileID(id), fileName(name), textPart(part) {
+			: fileID(id), fileName(name), textPart(clearTextPart(part)) {
+		}
+
+		std::string clearTextPart(const std::string& textPart) const {
+			std::string cleaned;
+			cleaned.reserve(textPart.size());
+			for (char c : textPart) {
+				if (c == '\n' || c == '\r') {
+					cleaned += ' ';
+				}
+				else {
+					cleaned += c;
+				}
+			}
+			return cleaned;
 		}
 
 		std::string escapeJsonString(const std::string& input) const {
@@ -43,12 +57,11 @@ public:
 			std::string safeTextPart = escapeJsonString(textPart);
 			std::string safeFileName = escapeJsonString(fileName);
 
-			return "{\"fileID\": " + std::to_string(fileID) +
-				", \"fileName\": \"" + safeFileName +
-				"\", \"textPart\": \"" + safeTextPart + "\"}";
+			return "{\"fileid\": " + std::to_string(fileID) +
+				", \"filename\": \"" + safeFileName +
+				"\", \"textpart\": \"" + safeTextPart + "\"}";
 		}
 	};
-
 	Searcher(std::shared_ptr<ThreadPool> threadPool);
 	~Searcher();
 	void AddFile(const uint64_t fileID);
@@ -56,7 +69,7 @@ public:
 	std::vector<SearchResult> SearchPhrase(const std::string& phrase);
 
 private:
-	CustomHashTable hashTable;
+	ConcurrentHashMap hashTable;
 	std::shared_ptr<ThreadPool> threadPool;
 
 	std::atomic<int> fileCount{ 0 };

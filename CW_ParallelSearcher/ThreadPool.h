@@ -52,6 +52,9 @@ auto ThreadPool::enqueue(F&& f, Args&&... args)
             throw std::runtime_error("enqueue on stopped ThreadPool");
 
         tasks.emplace([taskPtr]() { (*taskPtr)(); });
+        if (tasks.size() == 0) {
+			std::cout << "Task queue is empty after enqueue!" << std::endl;
+        }
     }
 
     condition.notify_one();

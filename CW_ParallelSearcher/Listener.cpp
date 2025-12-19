@@ -5,6 +5,7 @@
 #pragma comment(lib, "ws2_32.lib")
 #define PORT 8000
 #define BUFFER_SIZE 4096
+#define MAX_CLIENTS 1000
 
 Listener::Listener()
 {
@@ -37,7 +38,7 @@ void Listener::handleClient(int serverSocket, std::atomic<uint32_t>& client_coun
 	inet_ntop(AF_INET, &(clientAddr.sin_addr), client_addr, INET_ADDRSTRLEN);
 	std::cout << "Connection accepted from " << client_addr << ":" <<
 		ntohs(clientAddr.sin_port) << std::endl;
-	if (client_counter.load() <= 1000)
+	if (client_counter.load() <= MAX_CLIENTS)
 	{
 		client_counter++;
 		threadPool->enqueue([this, clientSocket, &client_counter]() {
